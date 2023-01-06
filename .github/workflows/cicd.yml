@@ -1,0 +1,47 @@
+name: portfolio-id deploy job
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      AWS_ACCESS_KEY_ID: ${{secrets.AWS_ACCESS_KEY_ID}}
+      AWS_SECRET_ACCESS_KEY: ${{secrets.AWS_SECRET_ACCESS_KEY}}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+      - name: Install AWS CLI & Configurating Profile Credentials
+        run: |
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+          unzip awscliv2.zip
+          sudo ./aws/install --update
+          aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID --profile default
+          aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY --profile default
+          aws configure set default.region ap-north-east-1
+      - name: Install SAMCLI
+        uses: aws-actions/setup-sam@v2
+      - uses: actions/setup-node@v2
+        with:
+          node-version: "14"
+          cache: npm
+          cache-dependency-path: ./clietn/package-lock.json
+      - name: Execute SAM template
+        run: |
+          sam build
+          sam deploy --parameter-overrides HostedZoneId=${secrets.HostedZoneId} AliasHostedZoneId=${secrets.AliasHostedZoneId} AcmArn=${secrets.AcmArn} --capabilities CAPABILITY_AUTO_EXPAND CAPABILITY_IAM --stack-name portfolio-id --no-fail-on-empty-changeset
+      - name: Build Frontend
+        working-directory: ./client
+        run: |
+          npm install
+          npm run build
+      - name: Deploy Frontend
+        working-directory: ./client
+        run: |
+          aws s3 cp --recursive dist/ s3://${{ secrets.domainName}}
+          
+      
+  
