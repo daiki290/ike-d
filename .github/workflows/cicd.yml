@@ -28,7 +28,7 @@ jobs:
         with:
           node-version: "14"
           cache: npm
-          cache-dependency-path: ./clietn/package-lock.json
+          cache-dependency-path: ./client/package-lock.json
       - name: Execute SAM template
         run: |
           sam build
