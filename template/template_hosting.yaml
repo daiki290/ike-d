@@ -1,0 +1,132 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Parameters:
+  HostedZoneId:
+    Type: String
+  AliasHostedZoneId:
+    Type: String
+  AcmArn:
+    Type: String
+
+Resources:
+  HostingBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: ike-d.work
+      VersioningConfiguration:
+        Status: Enabled
+      WebsiteConfiguration:
+        IndexDocument: index.html
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  # OAC
+  HostingAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: portfolio-id-access-control
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  # DNS Record
+  DnsRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: ike-d.work
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt CloudFrontDistribution.DomainName
+        HostedZoneId: !Ref AliasHostedZoneId
+
+
+  HostingBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref HostingBucket
+      PolicyDocument:
+        Version: "2008-10-17"
+        Statement:
+          - Action: "s3:GetObject"
+            Sid: AllowCloudFrontServicePrincipal
+            Effect: Allow
+            Principal: 
+              Service: cloudfront.amazonaws.com
+            Resource:
+              - !Sub 'arn:aws:s3:::${HostingBucket}/*'
+            Condition:
+              StringEquals:
+                AWS:SourceArn:
+                  !Join [
+                  "",
+                  [
+                    !Sub "arn:aws:cloudfront::${AWS::AccountId}:distribution/",
+                    !Ref CloudFrontDistribution
+                  ]
+                  ]
+      
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        CacheBehaviors:
+          - ForwardedValues:
+              Cookies:
+                Forward: none
+              QueryString: true
+            FunctionAssociations:
+              - EventType: viewer-request
+                FunctionARN: !GetAtt UriConvertFunction.FunctionMetadata.FunctionARN
+            PathPattern: "*"
+            TargetOriginId: !Sub S3Origin-${HostingBucket}
+            ViewerProtocolPolicy: redirect-to-https
+        CustomErrorResponses:
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+        DefaultRootObject: index.html
+        PriceClass: PriceClass_All
+        Aliases:
+          - !Ref HostingBucket
+        Origins:
+          - Id: !Sub S3Origin-${HostingBucket}
+            DomainName: !GetAtt HostingBucket.DomainName
+            S3OriginConfig:
+              OriginAccessIdentity: ""
+            OriginAccessControlId: !GetAtt HostingAccessControl.Id
+        Enabled: true        
+        Comment: !Sub '${AWS::StackName}-distribution'
+        ViewerCertificate:
+          SslSupportMethod: sni-only
+          AcmCertificateArn: !Ref AcmArn
+        DefaultCacheBehavior:
+          TargetOriginId: !Sub S3Origin-${HostingBucket}
+          ForwardedValues:
+            QueryString: false
+          ViewerProtocolPolicy: redirect-to-https
+  
+  UriConvertFunction:
+    Type: AWS::CloudFront::Function
+    Properties:
+      Name: portfolio-id-uri-convert
+      AutoPublish: true
+      FunctionCode: |
+        function handler(event) {
+          var req = event.request;
+          var uri = req.uri;
+
+          var doReplace = req.method === "GET" && uri.indexOf(".") === -1;
+          if(doReplace){
+            req.uri = `/index.html`;
+          }
+          return req;
+        }
+      FunctionConfig:
+        Comment: "Convert ReqURI to index.html"
+        Runtime: cloudfront-js-1.0

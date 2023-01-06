@@ -1,0 +1,25 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  portfolio-id
+
+  Sample SAM Template for portfolio-id
+
+Parameters:
+  HostedZoneId:
+    Type: String
+  AliasHostedZoneId:
+    Type: String
+  AcmArn:
+    Type: String  
+
+
+Resources:
+  HostingStack:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location: template/template_hosting.yaml
+      Parameters:
+        HostedZoneId: !Ref HostedZoneId
+        AliasHostedZoneId: !Ref AliasHostedZoneId
+        AcmArn: !Ref AcmArn
