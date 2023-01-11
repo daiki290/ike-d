@@ -32,7 +32,7 @@ jobs:
       - name: Execute SAM template
         run: |
           sam build
-          sam deploy --parameter-overrides HostedZoneId=${secrets.HOSTEDZONEID} AliasHostedZoneId=${secrets.ALIASHOSTEDZONEID} AcmArn=${secrets.ACMARN} --capabilities CAPABILITY_AUTO_EXPAND CAPABILITY_IAM --stack-name portfolio-id --no-fail-on-empty-changeset
+          sam deploy --parameter-overrides HostedZoneId=${{secrets.HOSTEDZONEID}} AliasHostedZoneId=${{secrets.ALIASHOSTEDZONEID}} AcmArn=${{secrets.ACMARN}} --capabilities CAPABILITY_AUTO_EXPAND CAPABILITY_IAM --stack-name portfolio-id --no-fail-on-empty-changeset
       - name: Build Frontend
         working-directory: ./client
         run: |
